@@ -1,3 +1,4 @@
+
 import os
 import sys
 import gitlab
@@ -88,7 +89,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-if __name__ == "__main__":
+def main():
     output = print_mrs_human
     if args.fzf:
         output = print_mrs_fzf
@@ -100,3 +101,7 @@ if __name__ == "__main__":
 
     if branch != None:
         checkout_to_branch(repo[2], branch)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,6 +1,6 @@
 [project]
 name = "rgf"
-version = "0.0.1"
+version = "0.0.2"
 authors = [
   { name="dcoello", email="dcpulido91@gmail.com" },
 ]
@@ -12,6 +12,9 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+
+[project.scripts]
+rgf = "rgf.__main__:main"
 
 [project.optional-dependencies]
 tests = [
