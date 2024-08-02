@@ -1,9 +1,8 @@
-
 import os
 import sys
 import gitlab
 import argparse
-from git import Repo
+from git import Repo, GitCommandError
 from pyfzf.pyfzf import FzfPrompt
 
 
@@ -94,8 +93,27 @@ def print_mrs_fzf(mrs):
 
 
 def checkout_to_branch(local_repo, branch: str):
+    try:
+        local_repo.git.checkout(branch)
+    except Exception:
+        id = local_repo.git.branch("--show-current")
+        print(f"(stash push) -> {id}")
+        local_repo.git.stash("push", "-m", id)
+        local_repo.git.checkout(branch)
     print(f"(checkout) -> {branch}")
-    local_repo.git.checkout(branch)
+    st = recover_stash(local_repo, branch)
+    if st is not None:
+        print(f"(stash pop) -> {branch}")
+        local_repo.git.stash("pop", st)
+
+
+def recover_stash(local_repo, branch):
+    for m in [s for s in local_repo.git.stash("list").split("\n") if "WIP" not in s]:
+        cmp = m.split(":")
+        if branch == cmp[2].strip():
+            return cmp[0].strip()
+
+    return None
 
 
 parser = argparse.ArgumentParser(
