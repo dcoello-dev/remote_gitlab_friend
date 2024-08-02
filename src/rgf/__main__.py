@@ -56,12 +56,38 @@ def format_line(mr) -> str:
 
 
 def reverse_format(line) -> str:
-    return line.split(":")[1].split(" -> ")[0].strip()
+    return line.split(" ")[1]
+
+
+def stack_tree(mrs, target) -> dict:
+    ret = dict()
+    for mr in mrs:
+        if mr.attributes["target_branch"] == target:
+            ret[mr.attributes["source_branch"]] = stack_tree(
+                mrs, mr.attributes["source_branch"])
+    return ret
+
+
+def tree_to_format(tree: dict, level=0) -> list:
+    ret = []
+    for k in tree.keys():
+        ret.append(f"[{level}] {k}")
+        ret = ret + tree_to_format(tree[k], level + 1)
+    return ret
+
+
+def format_mrs(mrs) -> list:
+    stree = dict()
+    for mr in mrs:
+        if mr.attributes['target_branch'] in ["main", "master", "develop"]:
+            stree[mr.attributes["source_branch"]] = stack_tree(
+                mrs, mr.attributes["source_branch"])
+    return tree_to_format(stree)
 
 
 def print_mrs_fzf(mrs):
     fzf = FzfPrompt()
-    ret = fzf.prompt([format_line(mr) for mr in mrs], '--cycle')
+    ret = fzf.prompt(format_mrs(mrs), '--cycle')
     if ret == None or ret == []:
         sys.exit(1)
     return reverse_format(ret[0])
