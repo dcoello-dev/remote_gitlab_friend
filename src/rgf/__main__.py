@@ -2,7 +2,7 @@ import os
 import sys
 import gitlab
 import argparse
-from git import Repo, GitCommandError
+from git import Repo
 from pyfzf.pyfzf import FzfPrompt
 
 
@@ -107,6 +107,29 @@ def checkout_to_branch(local_repo, branch: str):
         local_repo.git.stash("pop", st)
 
 
+def get_mr_from_branch(branch, mrs):
+    for mr in mrs:
+        if mr.attributes['source_branch'] == branch:
+            return mr
+    return None
+
+
+def rebase_stacked_branch(mrs, local_repo):
+    branch = local_repo.git.branch("--show-current")
+    mr = get_mr_from_branch(branch, mrs)
+    if mr is not None:
+        print(f"(stash push) -> {branch}")
+        local_repo.git.stash("push", "-m", branch)
+        os.system(f"git rebase -i {mr.attributes['target_branch']}")
+        st = recover_stash(local_repo, branch)
+        if st is not None:
+            print(f"(stash pop) -> {branch}")
+            local_repo.git.stash("pop", st)
+    else:
+        print("mr does not exist")
+        sys.exit(1)
+
+
 def recover_stash(local_repo, branch):
     for m in [s for s in local_repo.git.stash("list").split("\n") if "WIP" not in s]:
         cmp = m.split(":")
@@ -125,6 +148,11 @@ parser.add_argument(
     help="filter by author")
 
 parser.add_argument(
+    '-x', '--execute',
+    default="checkout",
+    help="action to execute on selected option")
+
+parser.add_argument(
     '-f', '--fzf',
     default=False,
     action="store_true",
@@ -141,10 +169,15 @@ def main():
     repo = local_repo()
     gl = init_gitlab(repo[0], get_token())
     p = remote_repo(repo[1], gl)
-    branch = output(get_mrs(p, author=args.author))
+    mrs = get_mrs(p, author=args.author)
+    branch = output(mrs)
 
-    if branch != None:
+    if args.execute == "checkout" and branch != None:
         checkout_to_branch(repo[2], branch)
+
+    if args.execute == "rebase" and branch != None:
+        checkout_to_branch(repo[2], branch)
+        rebase_stacked_branch(mrs, repo[2])
 
 
 if __name__ == "__main__":
