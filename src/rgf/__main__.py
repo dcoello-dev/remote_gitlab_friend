@@ -6,6 +6,23 @@ from git import Repo
 from pyfzf.pyfzf import FzfPrompt
 
 
+class c:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    ORANGE = '\033[93m'
+    RED = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    BACKSPACE = '\x08'
+
+    @staticmethod
+    def c(str: str, color: str) -> str:
+        return color + str + c.ENDC
+
+
 def local_repo(path=".", ssh=False) -> tuple:
     pt = ["https://", "git@"]
     try:
@@ -40,7 +57,7 @@ def get_mrs(project, author=None, state="opened") -> list:
     return ret if author == None else [m for m in ret if m.attributes["author"]["username"] == author]
 
 
-def print_mrs_human(mrs):
+def print_mrs_human(mrs, _):
     for mr in mrs:
         print(
             f'({mr.attributes["author"]["username"]}): {mr.attributes["title"]} ')
@@ -67,26 +84,42 @@ def stack_tree(mrs, target) -> dict:
     return ret
 
 
-def tree_to_format(tree: dict, level=0) -> list:
+def branch_is_sync(local_repo, branch, origin="origin") -> bool:
+    return local_repo.git.log(f"{origin}/{branch}..{branch}") == ""
+
+
+def tree_to_format(tree: dict, local_repo, level=0) -> list:
+    current_branch = local_repo.git.branch("--show-current")
     ret = []
+    l_color = c.GREEN if level == 0 else c.ORANGE
     for k in tree.keys():
-        ret.append(f"[{level}] {k}")
-        ret = ret + tree_to_format(tree[k], level + 1)
+        try:
+            sync = branch_is_sync(local_repo, k)
+            s_color = c.CYAN if sync else c.RED
+            s_simbol = "=" if sync else "~"
+        except Exception:
+            s_color = c.ORANGE
+            s_simbol = "#"
+        line = f"[{c.c(s_simbol, s_color)}][{c.c(str(level), l_color)}] {k}"
+        if current_branch == k:
+            line = f"{c.c('->', c.CYAN + c.BOLD)} {line}"
+        ret.append(line)
+        ret = ret + tree_to_format(tree[k], local_repo, level + 1)
     return ret
 
 
-def format_mrs(mrs) -> list:
+def format_mrs(mrs, local_repo) -> list:
     stree = dict()
     for mr in mrs:
         if mr.attributes['target_branch'] in ["main", "master", "develop"]:
             stree[mr.attributes["source_branch"]] = stack_tree(
                 mrs, mr.attributes["source_branch"])
-    return tree_to_format(stree)
+    return tree_to_format(stree, local_repo)
 
 
-def print_mrs_fzf(mrs):
+def print_mrs_fzf(mrs, local_repo):
     fzf = FzfPrompt()
-    ret = fzf.prompt(format_mrs(mrs), '--cycle')
+    ret = fzf.prompt(format_mrs(mrs, local_repo), '--cycle --ansi')
     if ret == None or ret == []:
         sys.exit(1)
     return reverse_format(ret[0])
@@ -170,7 +203,7 @@ def main():
     gl = init_gitlab(repo[0], get_token())
     p = remote_repo(repo[1], gl)
     mrs = get_mrs(p, author=args.author)
-    branch = output(mrs)
+    branch = output(mrs, repo[2])
 
     if args.execute == "checkout" and branch != None:
         checkout_to_branch(repo[2], branch)
